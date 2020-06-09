@@ -1,0 +1,547 @@
+---
+title: 'Pràctica 2: Modelització predictiva'
+subtitle: 'Tipologia i cicle de vida de les dades'
+author: "Autor: Albert Torres Rubio"
+date: "Juny 2020"
+output:
+  pdf_document:
+    highlight: zenburn
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+  html_document:
+    highlight: default
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 3
+  word_document: 
+    highlight: zenburn
+    toc: yes
+    toc_depth: 3
+csl: ieee.csl
+---
+
+\pagebreak
+
+# **Descripció del dataset**
+
+El dataset escollit per l'anàlisi és el que conté dades relacionades amb el vi negre [@dataset]. Concretament, és un dataset que recull dades de variants Portugueses del vi negre (*Vinho Verde*). El dataset ha estat obtingut a partir de la plataforma *Kaggle* mitjançant el següent enllanç:
+
+* https://www.kaggle.com/uciml/red-wine-quality-cortez-et-al-2009/download
+
+El dataset conté dades relacionades amb la composició física i química dels diferents vins enregistrats, juntament, amb una nota que determina la qualitat d'aquests.
+
+Des d'un punt de vista general les dades poden tenir un caràcter imporant ja que estan relacionant intrínsecament qualitats físiques/químiques amb una qualificació. Aixó implica que si l'estudi dona bons resultats és podría traçar una relació directe entre la qualitat d'un vi i les seves propietats físiques/químiques, que són objectives i mesurables. Aquest tipus d'anàlisi serien de gran utilitat a productors de vins, per exemple, per ajsutar els preus de les ampolles dde manera més precisa i ràpida, segons les propietats d'aquest. També, es podria "informatitzar" les qualifiacions de vins de tal manera que ja no dependrien només d'un catador si no també d'un analitzador "digital". 
+
+Consqüentment, la primera pregunta que vé a la ment quan s'observa el dataset i la seva descripció, és si hi ha relació entre les dades físiques/químiques i la qualificació dels vins. També, en el cas de que sí hagués una relació, quin tipus de relació seria. I finalment, es pot plantejar la pegunta de si es podria construir un predictor, prou eficient, que a partir de les dades físiques/químiques del vins determinés si el vi és de bona qualitat?
+
+Per altra banda, un altre possible anàlisi del dataset, seria crear una variable nova a partir d'un un valor de tall de la qualifiacio. Aquesta variable indicaria si un vi està en el grup dels "bons" o dels "dolents". A partir d'aquí, es podrien realitzar els anàlisis convenients. També, es podrien realitzar contrastos d'hipòtesi per tal d'extreure propietats interesants de les mostres que puguin ser inferides a la població.
+
+
+# **Integració i selecció de les dades d’interès a analitzar**
+
+Per tal d'analitzar les dades, s'han descarregat de l'enllaç anterior indicat i s'han desat dins la carpeta *data* del projecte amb el nom de *winequality-red.csv*. El següent troç de codi carrega le dades dins el projecte de R i mostra les seves característiques principals.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# LCàrrega de les dades
+wineData <- read.csv('../data/winequality-red.csv') 
+str(wineData)
+sapply(wineData, class)
+```
+
+Observant el resultat anterior i llegint la descripció del dataset proveït a *Kaggle*, es pot resumir les variables que conté el dataset i el tipus d'aquestes:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+library(kableExtra)
+knitr::opts_chunk$set(eval=T, echo=T)
+options(knitr.table.format = "latex")
+
+col_names <- colnames(wineData)
+description_table <- matrix(c(col_names[1], "Acidesa (no volàtil)", "Quantitat d'àcids no volàtils relacionats amb el vi", "Decimal"), ncol=4)
+description_table <- rbind(description_table, c(col_names[2], "Acidesa (volàtil)", "Quantitat d'acid acètic en el vi", "Decimal"))
+description_table <- rbind(description_table, c(col_names[3], "Àcid cítric", "Quantitat d'àcid cítric en el vi", "Decimal"))
+description_table <- rbind(description_table, c(col_names[4], "Sucre residual", "Quantitat de sucre restant, després de la fermentació", "Decimal"))
+description_table <- rbind(description_table, c(col_names[5], "Sal", "Quantitat de sal en el vi", "Decimal"))
+description_table <- rbind(description_table, c(col_names[6], "Diòxid de sulfur lliure ", "Quantitat de SO2 en forma lliure", "Decimal"))
+description_table <- rbind(description_table, c(col_names[7], "Diòxid de sulfur total", "Quantitat total de SO2 en totes les seves formes", "Decimal"))
+description_table <- rbind(description_table, c(col_names[8], "Densitat", "Densitat del vi", "Decimal"))
+description_table <- rbind(description_table, c(col_names[9], "pH", "PH del vi", "Decimal"))
+description_table <- rbind(description_table, c(col_names[10], "Sulfats", "Quantitat de sulfats", "Decimal"))
+description_table <- rbind(description_table, c(col_names[11], "Alcohol", "% d'alcohol", "Decimal"))
+description_table <- rbind(description_table, c(col_names[12], "Qualitat", "Qualificació del vi basada en dades sensorials", "Enter"))
+
+kable(description_table, col.names = c("Variable", "Nom", "Descripció", "Tipus"), booktabs = T) %>%
+  kable_styling(latex_options = c("striped")) %>%
+  kable_styling(position = "center")
+```
+
+El dataset conté 1599 registres de vins i 12 variables diferents. Donat que totes les variables són atributs fisico-químics rellevants dels vins, s'han considerat com a d'interés, i per tant, tot el set de dades participarà a l'estudi.
+
+# **Neteja de les dades**
+
+## **Les dades contenen zeros o elements buits? Com gestionaries aquests casos?**
+
+S'analitzen les dades per veure si hi ha algun element buit:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# La funció de R mira si ha algun valor buit (' ') o 'N/A'
+any(is.na(wineData))
+```
+
+Com es pot observar no existeix cap variable que contingui un valor buit. Considerant la possibilitat de que el valor 0 denoti mancança de la dada, es descarta completament. Com hem vista abans, totes les dades són valors numèrics i, a través de la compressió global del dataset, el valor 0 està dins del domini de totes les variables. Es a dir, que si apareix un valor 0 en els registres, aquest s'ha de considerar com un valor vàlid. 
+
+En el cas que s'haguèssin trobat valors buits es podrien dur a terme diferents aproximacions per tal de tractar aquests valors. Uns quants exemples d'aproximacions per tractar aquests valors buits serien: 
+
+* Eliminar els registres amb valors buits.
+* Substituir els valors per una mateixa mesura de tendència central, com la mitjana o la mediana.
+* Utilitzar mètodes probabilístics com el kNN, missForest, regressions... per predir el valor perdut i substituir-lo al dataset.
+* Etc.
+
+
+## **Identificació i tractament de valors extrems**
+
+Per tal d'analitzar si existeixen valors extrems en el conjunt de dades, utilitzarem la funció *boxplot* d'R.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, fig.height=3.3}
+par(mfrow=c(1,3))
+for (i in 1:ncol(wineData)) {
+  boxplot(wineData[,i], main=colnames(wineData)[i], col="#69b3a2")
+}
+```
+
+A través dels gràfics es pot observar com R determina que existeixen valors extrems en totes les variables. Peró, a continuació, s'analitzarà si aquests valors extrems són erronis o simplement són valors distants peró petanyents al domini de les mostres. Un valor extrem és un valor que s'allunya dels valors "comuns" de la variable peró no vol dir que sigui un valor erroni en un principi.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+outliers_table <- matrix(ncol=4)
+for (i in 1:ncol(wineData)) {
+  outliers <- boxplot.stats(wineData[,i])$out
+  outliers_table <- rbind(outliers_table, c(col_names[i], 
+                                            round(mean(wineData[,i]), 3),
+                                            round(min(outliers), 3),
+                                            round(max(outliers), 3)))
+}
+kable(outliers_table[-1,], 
+      col.names = c("Variable", "Mitja", "Mínim valor extrem", "Màxim valor extrem"), 
+      booktabs = T) %>%
+  kable_styling(latex_options = c("striped")) %>%
+  kable_styling(position = "center")
+```
+
+Amb el codi anterior i la taula creada a partir d'aquest, es poden observar els rangs que formen tots els valors extrems de les variables (mínim valor extrem i màxim valor extrem). De tal manera que no hi ha cap valor extrem fora d'aquest rang. Analitzant tots els rangs, cap rang conté cap valor totalment incoherent amb la variable que representa. Simplement aquests valors s'allunyen de la seva mitja, no de manera excesiva com per a considerar-los valors extrems incoherets o erronis. Com a resultat d'aquest anàlisi, no s'aplicarà cap tractament sobre els valors extrems ja que es consideren veritables i possibles valors que poden adquirir les propietats físiques i químiques del vi.
+
+# **Anàlisi de les dades**
+
+## **Selecció dels grups de dades que es volen analitzar/comparar (planificació dels anàlisis a aplicar)**
+
+Es realitzaran 3 anàlisis:
+
+1. El primer anàlisi consistirà en realitzar un contrast d'hipòtesi del valor mitjà de la qualitat del vi amb el valor (qualificació) de 5. Aquest anàlisi vol determinar si la qualitat general del vi negre *Vinho Verde* és igual o superior a 5. Es a dir, es pretén respondre la següent pregunta: ¿Es pot afirmar que la qualitat mitjana d'un vi negre *Vinho Verde*, és acceptable? Considerant que "acceptable" correspon a una qualificació de 5 o superior. 
+
+2. El segon anàlisi serà crear un model de regressió lineal que sigui predictor de la qualitat del vi a través de les propietats fisico-químiques d'aquest. Es crearan dos models lineals, en el primer s'utilitzarà una matriu de correlació per determinar quines variables s'inclouran en el model i en el segon es durà a terme un anàlisi previ de components principals (PCA). A través d'aquest estudi es voldrà determinar, per una banda quines són les propietats del vi que creen un millor model de regressió lineal i per l'altra, si es millora la predicció d'aquest model fent un anàlisi previ de components principals.
+
+3. Finalment, l'últim anàlisi consistirà en crear un model de regressió logística que intenti determinar si un vi es "bo" o "dolent", entenent com a "bo" una qualitat superior o igual a 5 i "dolent" una qualitat inferior a 5. Per aquest anàlisi es crearà una variable dicotòmica que classificarà els vins en "bons" i "dolents" segons la qualifiació d'aquests. Tindrà el valor 1 en cas de que el vi sigui "bo" i 0 en el cas contrari:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+wineData$goods <- ifelse(wineData$quality >= 5, 1, 0)
+```
+
+## **Comprovació de la normalitat i homogeneïtat de la variància**
+
+Es comprovarà tots si les dades segueixen una distribució normal i la seva homocedasticitat respecte la variable qualitat. Per realitzar el test de normailitat utilitzarem els tests *Shapiro-Wilk* i *Kolmogorov-Smirnov (Lilliefors)*.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(nortest)
+
+norm_table <- matrix(ncol=4)
+for (i in 1:12) {
+  p_val_1 = shapiro.test(wineData[,i])$p.value
+  p_val_2 = lillie.test(wineData[,i])$p.value
+  if (p_val_1 >= 0.05 && p_val_2 >= 0.05) {
+    normal <- "Sí"
+  } else {
+    normal <- "No"
+  }
+  
+  norm_table <- rbind(norm_table, c(col_names[i], p_val_1, p_val_2, normal))
+}
+
+kable(norm_table[-1,], 
+      col.names = c("Variable", "Shapiro-Wilk", "Kolmogorov-Smirnov (Lilliefors)", 
+                    "Normalitat"), 
+      booktabs = T) %>%
+  add_header_above(c(" ", "p-valor" = 2), italic = T) %>%
+  kable_styling(latex_options = c("striped")) %>%
+  kable_styling(position = "center")
+```
+
+Com es pot observar, cap *p-valor* supera el valor de significació 0.05, de tal manera que cap variable segueix una distribució normal. Per tant, s'utilitzarà el test *Fligner-Killeen* per avaluar la homocedasticitat de les variables, ja que és un test orientat a variables que no segueixen un distribució normal.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+hom_table <- matrix(ncol=3)
+for (i in 1:11) {
+  p_val = fligner.test(wineData$quality, wineData[, i])$p.value
+  if (p_val >= 0.05) {
+    flag <- "Sí"
+  } else {
+    flag <- "No"
+  }
+  hom_table <- rbind(hom_table, c(col_names[i], p_val, flag))
+}
+
+kable(hom_table[-1,], 
+      col.names = c("Variable", "p-valor (Fligner-Killeen*)", "Homocedasticitat"),
+      booktabs = T) %>%
+  kable_styling(latex_options = c("striped")) %>%
+  kable_styling(position = "center")
+```
+
+Com es pot observar, les variables que guarden homogeneïtat de la variança respecte la qualitat són les que obtenen un *p_valor* més elevat que 0.05 (nivell de signifiació).
+
+Com a punt final d'aquest apartat, com s'ha vist que cap variable es distribuex de manera normal, s'aplicarà el teorema del límit central (TLC). S'obtindran els resultats dels anàlisis considerant que les variables s'aproximen a una distribució normal, ja que tenim un gran nombre de registres (1599). Els resultats obtinguts seràn aproximacions prou acurades. 
+
+El TLC estableix que quan el tamany de la mostra es suficientment gran (N>30), la distribució de les mitjanes segueix aproximadament una distribució normal. El que implica, entre altres factors, que es poden aplicar procediments estadístics comuns, que requereixen que les dades siguin aproximadament normals. Permet aplicar aquests procediments útils a poblacions que són considerablement no normalas, com ocorre en el cas d'aquest estudi. 
+
+## **Aplicació de proves estadístiques per comparar els grups de dades. En funció de les dades i de l’objectiu de l’estudi, aplicar proves de contrast d’hipòtesis, correlacions, regressions, etc. Aplicar almenys tres mètodes d’anàlisi diferents**
+
+### Contrast del valor mitjà de la qualitat del vi amb una qualificació de 5
+
+* Hipòtesi nul·la:
+
+$$H_0: \: \mu=5$$
+
+* Hipòtesi alternativa:
+
+$$H_1: \: \mu > 5 $$
+
+On $\mu$ és la qualificació mitjana i la hipòtesi alternativa és unilateral.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Utilitzem la funció t.test per realitzar el contrast d'hipòtesi
+t_greater <- t.test(wineData$quality, mu = 5, alternative = "greater")
+print(t_greater)
+```
+
+Com es pot observar el *p_valor* del test ha sorit inferior al nivel de significació establert (0.05), per tant, es rebutja la hipòtesi nul·la en favor a l'alternativa. D'aquesta manera es pot determinar que la qualitat mitjana dels vins negres (*Vinho Verde*) és superior al 5 amb una confiança del 95%.
+
+Seguidament, es calcula el test bilateral per obtenir l'interval de confiança:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+t_sided <- t.test(wineData$quality)
+print(t_sided)
+max_ci <- t_sided$conf.int[1]
+min_ci <- t_sided$conf.int[2]
+```
+
+L'interval de confiança del valor mitjà de la qualitat del vi és:
+
+$$\mu \in [`r max_ci`, `r min_ci`]$$
+Com es pot observar, el valor 5 no està comprès dintre de l'interval. L'interval de confiança ens indica que de cada 100 estudis independents amb diferents conjunts de mostres cada cop, en 95 (com a mínim) dels 100 casos tindrem la veritable qualitat mitjana del vi compresa dintre dels intervals calculats per cada estudi. Podem afirmar que el valor de la qualitat mitjana dels vins negres (*Vinho Verde*) estarà compresa dins l'interval anterior amb una confiança del 95%.
+
+### Models de regressió lineal
+
+Per crear el model de regressió lineal s'esculliran les variables més correlacionades amb la qualitat del vi:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+c_mat <- cor(wineData, method="spearman")
+print(c_mat)
+```
+
+Com es pot observar a la columna "quality" no hi ha cap variable altament correlacionada amb aquesta propietat. Si més no, les variables que tenen un valor absolut més alt de correlació són: l'alcohol amb una correlació de $`r c_mat[11,12]`$ i l'acidesa (volàtil) amb un valor de $`r c_mat[2,12]`$.
+
+A continuació, es provaran diverses combinacions de variables per intetar trobar el millor model de regressió lineal:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Model lineal amt totes les variables
+lm_all <- lm(quality ~ ., data=wineData[,1:12])
+
+# Model lineal amb alcohol i acidesa volàtil
+lm_al_va <- lm(quality ~ alcohol+volatile.acidity, data=wineData[,1:12])
+
+# Model lineal amb les variables  amb el codi de signifiació més alt
+# segons el primer model
+lm_custom <- lm(quality ~ alcohol+volatile.acidity+chlorides+
+                  total.sulfur.dioxide+sulphates+free.sulfur.dioxide
+                +pH, data=wineData[,1:12])
+
+coef <- lm_custom$coefficients
+r2_custom <- summary(lm_custom)$adj.r.squared
+
+summary(lm_all)
+summary(lm_al_va)
+summary(lm_custom)
+```
+
+A partir dels models lineals creats es pot observar com la bondat de l’ajust d'aquests no és massa significativa, ja que el coeficient de determinació ajustat és molt baix en cada cas. Aixó implica que no serien bons predictors de la qualitat del vi. Si més no, el millor model de regressió lienal obtingut ha estat el següent:
+
+\begin{gather*}
+quality = \beta_0 + \beta_{alcohol}*AL + \beta_{volatile.acidity}*VA + \beta_{chlorides}*CHL + \\
++ \beta_{total.sulfur.dioxide}*TSD + \beta_{sulphates}*SUL + \beta_{free.sulfur.dioxide}*FSD + \beta_{pH}*PH
+\end{gather*}
+
+\begin{gather*}
+quality = `r coef[1]` + `r coef[2]`*AL `r coef[3]`*VA 
+`r coef[4]`*CHL \\
+`r coef[5]`*TSD
++`r coef[6]`*SUL
++`r coef[7]`*FSD
+`r coef[8]`*PH
+\end{gather*}
+
+Amb un coeficient de determinació ajustat de $`r r2_custom`$.
+
+Seguidament s'estudiarà l'existència o no de multicolinealitat entre les covariables del model anterior. Es calcularan els factors d’inflació respectius (VIF). Aquest factor determina l’efecte de la colinealitat de la variància sobre un model de regressió.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(faraway)
+vif_lm_custom <- faraway::vif(lm_custom)
+print(vif_lm_custom)
+```
+
+S’observa com els VIFs corresponents a les variables explicatives no superen el valor 5 [@vif][@vif2]. Aixó implica que no existeix una colinealitat forta entre aquestes variables i per tant, no són dependents entre sí. D’aquesta manera es confirma que es poden utilitzar com a variables explicatives independents en el model de regressió.
+
+El següent pas en aquest estudi es calcular un nou model de regressió lineal aplicant prèviament un anàlisi de components principals (ACP), per veure si es milloren els resultats. L'anàlisi de components principals és una tècnica utilitzada per a descriure un conjunt de dades en termes de noves variables ("components") no correlacionades. L'objectiu és trobar les components que expliquen la màxima variança de les dades originals, major sigui la variància que expliquen de les dades originals major és la informació que contenen les components. L'ACP bucsa la projecció segons la que les dades queden millor respresanteds entermes de mínims quadrats. Per aplicar aquesta tècnica s'utilitzarà la funció *prcomp()* de R:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# S'aplica la funció prcomp a les variables del dataset 
+# sense incluir la columna "quality", ni "goods"
+prin_comp <- prcomp(wineData[,1:11], scale = T, center = T)
+std_dev <- prin_comp$sdev
+pr_var <- std_dev^2
+prop_varex <- pr_var/sum(pr_var)
+
+# Suma acumulativa del percentatge de la variancia explicada 
+# per les components principals
+cumsum(prop_varex)
+
+# Gràfics representatius
+par(mfrow=c(1,2))
+plot(prop_varex, xlab = "Components principals",
+     ylab = "Proporció de la variancia explicada",
+     type = "b")
+
+plot(cumsum(prop_varex), xlab = "Components principals",
+ ylab = "Proporció acumulada de la variancia explicada",
+ type = "b")
+```
+
+Com es pot observar a partir dels resultats anteriors, amb les 7 primeres components principals ja s'explica el 90% de la variancia de les dades originals del dataset. Per tant, es crearà el nou model de regressió amb aquestes 7 components. Per dur a terme aquest anàlisi s'haurà de crear un nou dataset on estiguin aquestes components principals, juntament amb la qualificació dels vins del dataset original.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Es crea el nou dataset a paritr de les components principals
+winePrinComp <- as.data.frame(prin_comp$x[,1:7])
+winePrinComp <- cbind(winePrinComp, wineData$quality)
+colnames(winePrinComp)[8] <- "quality"
+
+# Es crea el nou model de regressió lineal
+lm_prcomp <- lm(quality ~ ., data=winePrinComp)
+r2_prcomp <- summary(lm_prcomp)$adj.r.squared
+summary(lm_prcomp)
+```
+
+Com es pot observar no es millora el model de regressió lineal previ i la bondat de l'ajust continua sent baixa, ja que el coeficient de determinació ajustat és, en aquest cas, $`r r2_prcomp`$.
+
+
+### Model de regressió logística
+
+En aquest apartat, es realitzarà el model de regressió logística que intentarà predir la bona qualitat del vi. Es a dir si el vi tindrà una qualitat superior o inferior a 5. Es provaran diverses combinacions de variables per intetar trobar el millor model:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Nou dataset sense la variable "quality""
+# ja que analitzem la variable "goods"
+goodsData <- wineData
+goodsData$quality <- NULL
+
+# Model logístic amt totes les variables
+glm_all <- glm(goods ~ ., data=goodsData, family = "binomial")
+
+# Model logísitc amb alcohol i acidesa volàtil
+glm_al_va <- glm(goods ~ alcohol+volatile.acidity, data=goodsData, family = "binomial")
+
+# Model lineal amb les variables  amb el codi de signifiació més alt
+# segons el primer model
+glm_custom <- glm(goods ~ volatile.acidity+residual.sugar+pH+alcohol, 
+                  data=goodsData, family = "binomial")
+
+glm_coef <- glm_all$coefficients
+aic <- glm_all$aic
+
+summary(glm_all)
+summary(glm_al_va)
+summary(glm_custom)
+```
+
+Segons els diferents models creats es pot observar que el que presenta un menor AIC (*Akaike Information Criterion*) és el primer model, el que conté totes les variables del dataset. L'AIC és una mesura de la qualitat relativa d'un model estadístic. El menor AIC dels models creats serà, en relació als altres, el millor model d'aquest últim anàlisi. En conseqüència, el millor model obtingut segons l'AIC és el següent:
+
+
+ \begin{gather*}
+logit(goods) = \beta_0 + \beta_{fixed.acidity}*FA + \beta_{volatile.acidity}*VA + \beta_{citric.acid}*CA + \\
++ \beta_{residual.sugar}*RS + \beta_{chlorides}*CHL + \beta_{free.sulfur.dioxide}*FSD + \beta_{total.sufur.dioxide}*TSD + \\
+\beta_{density}*D + \beta_{pH}*PH + \beta_{sulphates}*SUL + \beta_{alcohol}*AL
+\end{gather*}
+
+\begin{gather*}
+logit(goods) = `r glm_coef[1]` + `r glm_coef[2]`*FA `r glm_coef[3]`*VA
+`r glm_coef[4]`*CA \\
+`r glm_coef[5]`*RS
++`r glm_coef[6]`*CHL
++`r glm_coef[7]`*FSD \\
+`r glm_coef[8]`*TSD
++`r glm_coef[9]`*D
+`r glm_coef[10]`*SUL
++`r glm_coef[11]`*AL
+\end{gather*}
+
+Amb un AIC de $`r round(aic,2)`$.
+
+
+L'AIC és un paràmetre que pondera entre la bondat de l'ajust i la complexitat del model. En el següent apartat es veurà mitjançant certs gràfics la bondat de l'ajust d'aquest millor model de regressió logísitca per a determinar si és un bon model predictor.
+
+Com a punt final de l'anàlisi, s'aplicarà el test de Hosmer-Lemeshow que avalúa paramètricament la bondat de l'ajust d'un model logístic. Aquest test es basa en dividir la mostra d’acord a les variables predites de probabilitat per a cada una de les observacions. Les observacions són dividides en *g* grups d’acord amb la probabilitat predita
+de cada observació. Comunment es pren *g = 10*. Aleshores, es tracta de contar interval per interval l’observat i el predit per a cadascún dels resultats de la variable dependent dicotòmica. Si l’ajust és bò, indica que la *p* predita s’associa amb el resultat 1 de la varaible binomial. Mitjançant un test chi quadrat es comparen les
+freqüències esperades de cada interval amb les observacions reals. Finalment, un valor elevat del *p-valor* del test chi quadrat indicarà que l’ajust es bò.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(ResourceSelection)
+hl <- hoslem.test(glm_all$y, glm_all$fitted.values, g=10)
+print(hl)
+```
+
+Com es pot observar el p-valor (`r hl$p.value`) és superior al nivell de significació del 0.05, per tant, l’ajust del model logísitic és bo, segons el test H-L. Un *p_valor* superior al nivell de significancia del test H-L indica que el model s'ajsuta a la realitat, per tant, implica que l'observat s'ajusta suficientment al esperat sota el model.
+
+
+# **Representació dels resultats a partir de taules i gràfiques**
+
+Per una banda, com hem vist al tercer apartat, hem utilitzat les gràfiques *boxplot* per determinar si existien valors extrems. Per una altra, en aquest apartat analitzarem la bondat dels ajustos dels models de regressió creats a l'apartat anterior. Concretament s'utilitzarà la corba ROC i el paràmetre AUC (*Area Under the Curver*) per a determinar la precissió dels ajustos.
+
+Utilitzant la llibreria pROC es pot dibuixar la corba ROC dels models i calcular l’àrea sota la corba. Si la corba ROC té una desviació important cap a l’esquerra i cap a la part superior del gràfic, està indicant que el model de regessió és un bon predictor. La corba ROC ens indica el balanç entre els veritables positius i els falsos negatius en un model de regressió.
+
+Per altra banda, quan més elevat sigui el paràmetre AUC indicarà un millor ajust del model. El millor model correspon al model que té l’àrea sota la corba ROC més elevada.
+
+## Model de regressió lineal
+
+Utilitzant el millor model de regressió lineal obtingut, indicat a l'apartat anterior, s'analitza a seva corba ROC:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(pROC)
+par(pty="s")
+roc_lm <- roc(wineData$quality, lm_custom$fitted.values, plot=TRUE,
+legacy.axes=TRUE, print.auc = TRUE, percent = TRUE,
+main = "ROC")
+```
+
+Com es pot observar, la corba no té una desviació prou significativa cap a l'esquerra ni cap a dalt, per tant, no es pot dir que la bondat de l'ajust sigui bona. Aixó ja quedava reflectit amb el coeficient de determinació ajustat obtingut ($`r r2_custom`$), corroborant el baix ajust. A més, l'àrea sota la corba tampoc té un valor massa elevat, encara que és més d'un 70%.
+
+També es poden analitzar els gràfics "Residus vs. Valors Ajustats" i el "Q-Q gràfic": 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+par(mfrow=c(1,2))
+plot(lm_custom, which = c(1,2))
+```
+
+Pel que fa al primer gràfic es pot observar com hi ha una diferencia sistemàtica entre els valors ajustats i els reals, els punts no són aleatories sobre la linea horitzontal del gràfic. Pêro, si es consideren les linees diagonals que es formen, el valors si que mostren certa aleatorietat, i aquestes línees diagonals són degudes als valors enters exactes que agafa la variable "quality". En el segon gràfic es pot observar, com els els residus guarden una distribució normal segons els quantils teòrics, ja que s'ajusten prou bé a la diagonal.
+
+
+## Model de regressió logística
+
+Emprant el millor model de regressió logística trobat, el que conté totes les variables del dataset, s'obté una la següent corba ROC:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+par(pty="s")
+roc_glm <- roc(glm_all$y, glm_all$fitted.values, plot=TRUE,
+legacy.axes=TRUE, print.auc = TRUE, percent = TRUE,
+xlab="% Falsos positius (1-Especificitat)",
+ylab="% Veritables positius (Sensitivitat)",
+main = "ROC")
+```
+
+Com es pot observar, en aquest cas la corba ROC presenta una accentuació més forta cap a l'esquerra i cap a dalt que en el cas anterior. Es pot afirmar que s'ha trobat una primera aproximació d'un bon model predictiu. Aquest permet distinguir quins vins són de bona qualitat (qualitat >= 5) i quins no, donades les seves propietats fisico-químiques, ja que el seu AUC és superior al 80%.
+
+
+# **Resolució del problema. A partir dels resultats obtinguts, quines són les conclusions? Els resultats permeten respondre al problema?**
+
+En aquest estudi s'han vist 3 anàlisis diferents. En primer lloc, s'ha dut a terme un constrast d'hipòtesi amb la qualitat mitjana del vi. S'ha vist com la qualitat mitjana del vi negre *Vinho Verde* es superior a 5. Concretament, el valor mitjà de la qualitat d'aquest vi està comprés dins de l'interval [`r max_ci`, `r min_ci`] amb una confiança del 95%. Per tant, la resposta a la pregunta plantejada sobre si la qualitat mitjana del vi és acceptable és afirmativa.
+
+A continuació s'han plantejat dos problemes relacionats amb una regressió lineal i una regressió logística. En el primer cas, s'ha intentat crear un model predictiu que a través de les qualitats fisico-químiques del vi determinés la qualitat d'aquest. El millor model lineal obtingut en aquest estudi ha estat el següent:
+
+\begin{gather*}
+quality = `r coef[1]` + `r coef[2]`*AL `r coef[3]`*VA 
+`r coef[4]`*CHL \\
+`r coef[5]`*TSD
++`r coef[6]`*SUL
++`r coef[7]`*FSD
+`r coef[8]`*PH
+\end{gather*}
+
+Si més no, aquest model té un coeficient de determinació ajustat de $`r round(r2_custom, 2)`$, el qual és molt baix. Aquest paràmetre indica que la bondat de l'ajust és baixa i per tant, el model no serveix com a model predictor. 
+
+A continuació, s'ha intentat veure si es millorava aquest model lineal mitjançat un anàlisi de components principals previ. S'ha creat un model amb les 7 primeres components, ja que expliquen més del 90% de la variancia de la mostra. En aquest cas s'ha obtingut un coeficient de determinació ajustat de $`r round(r2_prcomp, 2)`$, el qual és més baix que en el cas anterior, per tant, no s'ha millorat el model. Cal comentar que realitzant un anàlisi de correlacions entre les variables s'ha trobat que aquestes no están altament correlacionaes, per tant, és possible que altres mètodes de predicció siguin més eficients.
+
+Per últim, s'ha creat un model de regressió logística que intenta predir si un vi és de bona o mala qualitat, es a dir, si la seva qualificació és inferior o és igual o superior a 5. El millor model logístic trobat en aquest estudi ha estat el següent:
+
+\begin{gather*}
+logit(goods) = `r glm_coef[1]` + `r glm_coef[2]`*FA `r glm_coef[3]`*VA
+`r glm_coef[4]`*CA \\
+`r glm_coef[5]`*RS
++`r glm_coef[6]`*CHL
++`r glm_coef[7]`*FSD \\
+`r glm_coef[8]`*TSD
++`r glm_coef[9]`*D
+`r glm_coef[10]`*SUL
++`r glm_coef[11]`*AL
+\end{gather*}
+
+Mitjançant el gràfic de la corba ROC i el paràmtere AUC (`r round(roc_glm$auc, 2)`%) s'ha vist com és un model acceptable, ja que l'AUC supera el 80%. Aquest model podrà pedrir si un vi negre *Vinho Verde* té una qualitat superior o inferior a 5, es a dir, si està considerat bo o dolent, a partir de les propietats fisico-químiques del vi.
+
+Com a última conclusió, a través de l'observació de tots els resultats obtinguts en aquest estudi, és raonable considerar la possible aplicació d'anàlisis posteriors utilitzant eines més potents de *machine learning*, per tal de millorar aquests resultats. Per exemple, es podria realitzar un estudi més avançat aplicant diferents algoritmes de classifiació com el *RandomForest*, *Stochastic Gradient Descent Classifier*, *Support Vector Classifier (SVC)*, etc.
+
+# **Codi: Cal adjuntar el codi, preferiblement en R, amb el que s’ha realitzat la neteja, anàlisi i representació de les dades. Si ho preferiu, també podeu treballar en Python.**
+
+El codi es pot trobar al següent enllaç de Github:
+
+* https://github.com/albert-torres/redwine-quality-data-analyser
+
+Per altra banda, els arxius que contenen les dades originals i les dades processades (encara que no s'han aplicat gaires modificacions) es poden tobar en d'aquest projecte dins el subdirectori */data*. Els arxius han estat anomenats *winequality-red.csv* i *winequality-red-processed.csv*, respectivament.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+write.csv(wineData, "../data/winequality-red-processed.csv")
+```
+
+\pagebreak
+
+# **Referències**
+
+---
+references:
+
+- id: dataset
+  title: Modeling wine preferences by data mining from physicochemical properties. In Decision Support Systems, Elsevier, 47(4):547-553, 2009.
+  author:
+  - family: Cortez
+    given: A.
+  - family: Cerdeira
+    given: A.
+  - family: Almeida
+    given: F.
+  - family: Matos
+    given: T.
+  - family: Reis
+    given: J.
+  URL: 'https://www.kaggle.com/uciml/red-wine-quality-cortez-et-al-2009'
+  
+- id: vif
+  title: Applied Statistics with R
+  author:
+  - family: Dalpiaz
+    given: David
+  URL: 'https://daviddalpiaz.github.io/appliedstats/collinearity.html'
+  
+- id: vif2
+  title: El Factor de Inflacion de la Varianza en R
+  author:
+  - family: Rodríguez
+    given: A.
+  - family: García
+    given: C.
+  URL: 'http://r-es.org/9jornadasR/pdf/9JUR_paper_31.pdf'
+---
